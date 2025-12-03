@@ -360,7 +360,10 @@ void HandleAction (Action action)
         ADM_info("Closing ui\n");
         UI_closeGui();
         if(video_body && avifileinfo)
+        {
             A_saveSession();
+            A_autoSaveProject();
+        }
         if(video_body && video_body->canUndo())
             video_body->clearUndoQueue();
         return;
@@ -1354,6 +1357,48 @@ bool A_loadDefaultSettings(void)
         return video_body->setContainer("MKV",NULL);
     }
     return false;
+}
+/**
+ * \fn A_autoSaveProject
+ * \brief Auto-save project with unique ID to ~/projects/ folder
+ */
+bool A_autoSaveProject(void)
+{
+    // Only save if we have a file loaded
+    if (!avifileinfo)
+        return false;
+
+    IScriptEngine *engine = getPythonScriptEngine();
+    if (!engine)
+        return false;
+
+    // Get home directory
+    const char *home = getenv("HOME");
+    if (!home)
+    {
+        ADM_warning("Could not get HOME directory\n");
+        return false;
+    }
+
+    // Create ~/projects directory
+    std::string projectsDir = std::string(home) + "/projects";
+    if (!ADM_fileExist(projectsDir.c_str()))
+    {
+        ADM_info("Creating projects directory: %s\n", projectsDir.c_str());
+        if (!ADM_mkdir(projectsDir.c_str()))
+        {
+            ADM_warning("Could not create projects directory: %s\n", projectsDir.c_str());
+            return false;
+        }
+    }
+
+    // Generate unique filename using timestamp
+    std::string filename = projectsDir + "/project_" + ADM_getTimeDateAsString() + ".py";
+
+    ADM_info("Auto-saving project to: %s\n", filename.c_str());
+    A_saveScript(engine, filename.c_str());
+
+    return true;
 }
 /**
  * \fn A_saveSession
