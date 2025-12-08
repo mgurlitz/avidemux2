@@ -687,19 +687,37 @@ void A_queueJob(const char *jobName,const char *outputFile)
             }
             job.jobName=string(jobName);
 //#warning make sure it is unique
-            job.scriptName=string(jobName)+string(".")+engine->defaultFileExtension();
-            string completePath=ADM_getJobDir();
-            completePath+=job.scriptName;
+            string ext=engine->defaultFileExtension();
+            job.scriptName=string(jobName)+string(".")+ext;
+            string jobDir=ADM_getJobDir();
+            string completePath=jobDir + job.scriptName;
             bool collision=false;
             if(ADM_fileExist(completePath.c_str()))
             {
-                char str[4096+512+1];
-                str[0]='\0';
-                snprintf(str,4096+512+1,QT_TRANSLATE_NOOP("adm","Job script %s already exists. Overwrite?"),completePath.c_str());
-                str[4096+512]='\0';
-                if(false==GUI_Question(str))
-                    collision=true;
+                for(int suffix=2;suffix<5; suffix++)
+                {
+                    // Try next suffix
+                    char suffixStr[16];
+                    snprintf(suffixStr,16,"-%d.",suffix);
+                    completePath=jobDir+string(jobName)+string(suffixStr)+ext;
+                    if(!ADM_fileExist(completePath.c_str()))
+                    {
+                        job.scriptName=string(jobName)+string(suffixStr)+ext;
+                        break;
+                    }
+                }
+
+                if(ADM_fileExist(completePath.c_str()))
+                {
+                    char str[4096+512+1];
+                    str[0]='\0';
+                    snprintf(str,4096+512+1,QT_TRANSLATE_NOOP("adm","Job script %s already exists. Overwrite?"),completePath.c_str());
+                    str[4096+512]='\0';
+                    if(false==GUI_Question(str))
+                        collision=true;
+                }
             }
+
             if(collision || false==ADMJob::jobAdd(job))
             {
                 GUI_Error_HIG(QT_TRANSLATE_NOOP("adm","Error"),QT_TRANSLATE_NOOP("adm","Cannot add job %s"),jobName);
