@@ -42,6 +42,8 @@
 #include "ADM_script2/include/ADM_script.h"
 #include "ADM_muxerProto.h"
 
+extern void HandleAction(Action action);
+
 int      A_Save(const char *name);
 extern   ADM_audioStream  *audioCreateEncodingStream(EditableAudioTrack *ed,bool globalHeader,uint64_t startTime);
 
@@ -130,6 +132,18 @@ void HandleAction_Save(Action action)
 
                     // Queue job immediately with default values
                     A_queueJob(jobName.c_str(),outputFile.c_str());
+
+                    // Perform cut between markers A and B if they don't span the whole video
+                    uint64_t markerA = video_body->getMarkerAPts();
+                    uint64_t markerB = video_body->getMarkerBPts();
+                    uint64_t videoDuration = video_body->getVideoDuration();
+
+                    // Only cut if markers don't span the entire video
+                    if(markerA > 0 || markerB < videoDuration)
+                    {
+                        // Use the existing Cut action which handles all UI updates properly
+                        HandleAction(ACT_Cut);
+                    }
                 }
                 ADMJob::jobShutDown();
             }
