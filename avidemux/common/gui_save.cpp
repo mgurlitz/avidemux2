@@ -682,8 +682,9 @@ void A_queueJob(const char *jobName,const char *outputFile)
             job.outputFileName=string(outputFile);
             if(job.outputFileName.empty())
             {
-                GUI_Error_HIG(QT_TRANSLATE_NOOP("adm","Error"),QT_TRANSLATE_NOOP("adm","Output file not specified"));
-                return;
+                job.outputFileName="auto";
+                /* GUI_Error_HIG(QT_TRANSLATE_NOOP("adm","Error"),QT_TRANSLATE_NOOP("adm","Output file not specified")); */
+                /* return; */
             }
             job.jobName=string(jobName);
 //#warning make sure it is unique
