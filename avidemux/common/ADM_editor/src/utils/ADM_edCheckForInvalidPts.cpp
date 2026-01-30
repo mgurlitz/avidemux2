@@ -76,16 +76,16 @@ bool ADM_Composer::checkForValidPts (_SEGMENT *seg)
     {
         ADM_info("Checking file for broken PTS...\n");
         ADM_info("Checking %d frames out of %d.\n",checkRange,totalFrames);
-        DIA_workingBase *working=createWorking(QT_TRANSLATE_NOOP("ADM_Composer","Checking if timestamps are valid.."));
+        /* DIA_workingBase *working=createWorking(QT_TRANSLATE_NOOP("ADM_Composer","Checking if timestamps are valid..")); */
         for(int i=0;i<checkRange;i++)
         {
-            if(false == working->isAlive())
-                break;
+            /* if(false == working->isAlive()) */
+            /*     break; */
             DecodeNextPicture(seg->_reference);
-            working->update(i,checkRange);
+            /* working->update(i,checkRange); */
         }
         goToTimeVideo(from);
-        delete working;
+        /* delete working; */
         ADM_info("-------- Stats :----------\n");
 #define INFO(x) ADM_info(#x":%d\n",stats.x);
         INFO(  nbBFrames)
