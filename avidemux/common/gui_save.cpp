@@ -122,19 +122,14 @@ void HandleAction_Save(Action action)
                     GUI_Error_HIG(QT_TRANSLATE_NOOP("adm","Job"),QT_TRANSLATE_NOOP("adm","Cannot reach database. Do you have Job control running ?"));
                 }else
                 {
-                    std::string oFile;
-                    std::string prefilled=std::string("Job ")+ADM_getTimeDateAsString();
-                    const char *defaultExtension=ADM_MuxerGetDefaultExtension(UI_GetCurrentFormat());
-                    char *oText=ADM_strdup(prefilled.c_str());
-                    diaElemFile wFile(1,oFile,QT_TRANSLATE_NOOP("adm","Output file"),defaultExtension,NULL);
-                    diaElemText wText(&oText,QT_TRANSLATE_NOOP("adm","Job name"));
-                    diaElem *elems[2]={&wText,&wFile};
+                    // Generate default job name with timestamp
+                    std::string jobName=std::string("Job ")+ADM_getTimeDateAsString();
 
-                    if(  diaFactoryRun(QT_TRANSLATE_NOOP("adm","Queue job to jobList"),2,elems))
-                    {
-                        A_queueJob(oText,oFile.c_str());
-                    }
-                    ADM_dealloc(oText);
+                    // Generate default output file path
+                    std::string outputFile="";
+
+                    // Queue job immediately with default values
+                    A_queueJob(jobName.c_str(),outputFile.c_str());
                 }
                 ADMJob::jobShutDown();
             }
