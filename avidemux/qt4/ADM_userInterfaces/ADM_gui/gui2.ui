@@ -771,13 +771,13 @@
    <property name="minimumSize">
     <size>
      <width>543</width>
-     <height>120</height>
+     <height>100</height>
     </size>
    </property>
    <property name="maximumSize">
     <size>
      <width>524287</width>
-     <height>120</height>
+     <height>100</height>
     </size>
    </property>
    <property name="features">
@@ -816,6 +816,34 @@
       <number>9</number>
      </property>
      <item>
+      <widget class="ADM_clickableLabel" name="waveformDisplay">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>40</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>40</height>
+        </size>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="scaledContents">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="ADM_mwNavSlider" name="horizontalSlider">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
@@ -843,7 +871,25 @@
         <number>0</number>
        </property>
        <item>
-        <layout class="QHBoxLayout" name="navButtonsLayout">
+        <widget class="QWidget" name="navButtonsContainer">
+         <property name="visible">
+          <bool>false</bool>
+         </property>
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Ignored" vsizetype="Ignored">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>0</width>
+           <height>0</height>
+          </size>
+         </property>
+         <layout class="QVBoxLayout">
+          <item>
+           <layout class="QHBoxLayout" name="navButtonsLayout">
          <property name="spacing">
           <number>0</number>
          </property>
@@ -1249,7 +1295,10 @@
            </property>
           </spacer>
          </item>
-        </layout>
+           </layout>
+          </item>
+         </layout>
+        </widget>
        </item>
        <item>
         <layout class="QHBoxLayout" name="_4">
@@ -2059,6 +2108,11 @@
    <class>ADM_mwNavSlider</class>
    <extends>QSlider</extends>
    <header>ADM_mwNavSlider.h</header>
+  </customwidget>
+  <customwidget>
+   <class>ADM_clickableLabel</class>
+   <extends>QLabel</extends>
+   <header>ADM_clickableLabel.h</header>
   </customwidget>
  </customwidgets>
  <tabstops>

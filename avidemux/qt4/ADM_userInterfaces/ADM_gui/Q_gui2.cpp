@@ -28,6 +28,8 @@
 #   include <QScreen>
 #endif
 #include <QClipboard>
+#include <QPainter>
+#include <QPixmap>
 #ifdef USE_CUSTOM_TIME_DISPLAY_FONT
 #   include <QFontDatabase>
 #endif
@@ -39,6 +41,7 @@
 #include "ADM_cpp.h"
 #define MENU_DECLARE
 #include "Q_gui2.h"
+#include "ADM_clickableLabel.h"
 
 #ifdef BROKEN_PALETTE_PROPAGATION
     #include <QAbstractItemView>
@@ -113,6 +116,7 @@ extern int A_appendVideo(const char *name);
 
 int SliderIsShifted=0;
 static void setupMenus(void);
+static void updateWaveformDisplay(void);
 static int shiftKeyHeld=0;
 static int ctrlKeyHeld=0;
 static ADM_mwNavSlider *slider=NULL;
@@ -336,7 +340,7 @@ void MainWindow::sliderPressed(void)
  * \fn sliderWheel
  */
 void MainWindow::sliderWheel(int way)
-{ 
+{
     bool swapWheel = false;
     prefs->get(FEATURES_SWAP_MOUSE_WHEEL,&swapWheel);
     if (swapWheel)
@@ -356,6 +360,34 @@ void MainWindow::sliderWheel(int way)
         else
             sendAction(ACT_PreviousKFrame);
     }
+}
+/**
+ * \fn waveformClicked
+ * \brief Handle clicks on the waveform display and seek to that position
+ */
+void MainWindow::waveformClicked(int position, int totalWidth)
+{
+    if (!avifileinfo || totalWidth <= 0)
+        return;
+
+    // Calculate the ratio of where the user clicked
+    double ratio = (double)position / (double)totalWidth;
+
+    // Clamp to valid range
+    if (ratio < 0.0) ratio = 0.0;
+    if (ratio > 1.0) ratio = 1.0;
+
+    // Calculate slider value (slider range is 0 to ADM_LARGE_SCALE)
+    int sliderValue = (int)(ratio * ADM_LARGE_SCALE);
+
+    ADM_info("[Waveform] Clicked at position %d/%d (ratio=%.3f), setting slider to %d\n",
+             position, totalWidth, ratio, sliderValue);
+
+    // Update the slider position
+    slider->setValue(sliderValue);
+
+    // Trigger the seek action
+    sendAction(ACT_Scale);
 }
 /**
  * \fn thumbSlider_valueEmitted
@@ -694,7 +726,10 @@ MainWindow::MainWindow(const vector<IScriptEngine*>& scriptEngines) : _scriptEng
     connect( slider,SIGNAL(sliderReleased()),this,SLOT(sliderReleased()));
         connect( slider,SIGNAL(sliderPressed()),this,SLOT(sliderPressed()));
         connect( qslider,SIGNAL(sliderAction(int)),this,SLOT(sliderWheel(int)));
-        
+
+        // Waveform display
+        connect( ui.waveformDisplay,SIGNAL(clicked(int,int)),this,SLOT(waveformClicked(int,int)));
+
         connect( &dragTimer, SIGNAL(timeout()), this, SLOT(dragTimerTimeout()));
         connect( &busyTimer, SIGNAL(timeout()), this, SLOT(busyTimerTimeout()));
         connect( &navigateWhilePlayingTimer, SIGNAL(timeout()), this, SLOT(navigateWhilePlayingTimerTimeout()));
@@ -3286,6 +3321,17 @@ void UI_setCurrentTime(uint64_t curTime)
       sprintf(text, "%02d:%02d:%02d.%03d", hh, mm, ss, ms);
     WIDGET(currentTime)->setText(text);
 
+    // Update waveform position indicator
+    ADM_clickableLabel *waveform = qobject_cast<ADM_clickableLabel*>(WIDGET(waveformDisplay));
+    if (waveform && video_body && avifileinfo)
+    {
+        uint64_t totalDuration = video_body->getVideoDuration();
+        if (totalDuration > 0)
+        {
+            double ratio = (double)curTime / (double)totalDuration;
+            waveform->setPositionRatio(ratio);
+        }
+    }
 }
 
 /**
@@ -3302,7 +3348,133 @@ void UI_setTotalTime(uint64_t curTime)
       sprintf(text, "/ %02d:%02d:%02d.%03d", hh, mm, ss, ms);
     WIDGET(totalTime)->setText(text);
     slider->setTotalDuration(curTime);
+    updateWaveformDisplay();
 }
+/**
+    \fn updateWaveformDisplay
+    \brief Update the waveform display with images for each segment
+*/
+static void updateWaveformDisplay(void)
+{
+    QLabel *waveformLabel = WIDGET(waveformDisplay);
+    ADM_info("[Waveform] updateWaveformDisplay called, label=%p\n", waveformLabel);
+    if (!waveformLabel)
+        return;
+
+    // Clear if no video loaded
+    if (!video_body || !avifileinfo)
+    {
+        ADM_info("[Waveform] No video loaded, clearing\n");
+        waveformLabel->clear();
+        return;
+    }
+
+    uint32_t numSegs = video_body->getNbSegment();
+    uint64_t totalDuration = video_body->getVideoDuration();
+    ADM_info("[Waveform] numSegs=%u, totalDuration=%" PRIu64 "\n", numSegs, totalDuration);
+    if (numSegs == 0 || totalDuration == 0)
+    {
+        waveformLabel->clear();
+        return;
+    }
+
+    int labelWidth = waveformLabel->width();
+    int labelHeight = waveformLabel->height();
+    ADM_info("[Waveform] label size: %dx%d\n", labelWidth, labelHeight);
+    if (labelWidth < 10 || labelHeight < 10)
+    {
+        ADM_info("[Waveform] Widget not yet sized properly, skipping\n");
+        return;
+    }
+
+    // Create a composite pixmap
+    QPixmap composite(labelWidth, labelHeight);
+    composite.fill(Qt::transparent);
+    QPainter painter(&composite);
+
+    // For each segment, load and draw its waveform
+    for (uint32_t i = 0; i < numSegs; i++)
+    {
+        _SEGMENT *seg = video_body->getSegment(i);
+        if (!seg)
+            continue;
+
+        // Get the video file path for this segment
+        _VIDEOS *vid = video_body->getRefVideo(seg->_reference);
+        if (!vid || !vid->_aviheader)
+            continue;
+
+        const char *videoPath = vid->_aviheader->getMyName();
+        if (!videoPath)
+            continue;
+
+        // Construct waveform image path: videofile.png
+        QString waveformPath = QString::fromUtf8(videoPath) + ".png";
+        ADM_info("[Waveform] Segment %u: looking for '%s'\n", i, waveformPath.toUtf8().constData());
+
+        // Check if waveform image exists
+        if (!QFileInfo::exists(waveformPath))
+        {
+            ADM_info("[Waveform] File not found: %s\n", waveformPath.toUtf8().constData());
+            continue;
+        }
+
+        // Load the waveform image
+        QPixmap waveformImg(waveformPath);
+        if (waveformImg.isNull())
+        {
+            ADM_info("[Waveform] Failed to load image: %s\n", waveformPath.toUtf8().constData());
+            continue;
+        }
+
+        ADM_info("[Waveform] Loaded image %dx%d from %s\n",
+                 waveformImg.width(), waveformImg.height(), waveformPath.toUtf8().constData());
+
+        // Get reference video total duration for cropping
+        uint64_t refDuration = vid->_aviheader->getVideoDuration();
+        if (refDuration == 0)
+            continue;
+
+        // Calculate source image crop region based on segment's position within reference video
+        double srcStartRatio = (double)seg->_refStartTimeUs / (double)refDuration;
+        double srcDurationRatio = (double)seg->_durationUs / (double)refDuration;
+
+        int srcX = (int)(srcStartRatio * waveformImg.width());
+        int srcW = (int)(srcDurationRatio * waveformImg.width());
+        if (srcW < 1) srcW = 1;
+        // Clamp to image bounds
+        if (srcX + srcW > waveformImg.width())
+            srcW = waveformImg.width() - srcX;
+
+        ADM_info("[Waveform] Segment %u: refStart=%" PRIu64 ", refDur=%" PRIu64 ", crop x=%d w=%d\n",
+                 i, seg->_refStartTimeUs, refDuration, srcX, srcW);
+
+        // Crop the relevant portion from source waveform
+        QPixmap cropped = waveformImg.copy(srcX, 0, srcW, waveformImg.height());
+
+        // Calculate the position and width for this segment in the display
+        double startRatio = (double)seg->_startTimeUs / (double)totalDuration;
+        double durationRatio = (double)seg->_durationUs / (double)totalDuration;
+
+        int xPos = (int)(startRatio * labelWidth);
+        int segWidth = (int)(durationRatio * labelWidth);
+        if (segWidth < 1)
+            segWidth = 1;
+
+        ADM_info("[Waveform] Drawing segment %u at x=%d, width=%d\n", i, xPos, segWidth);
+
+        // Scale cropped portion to fit segment width in display
+        QPixmap scaled = cropped.scaled(segWidth, labelHeight,
+                                        Qt::IgnoreAspectRatio,
+                                        Qt::SmoothTransformation);
+        painter.drawPixmap(xPos, 0, scaled);
+    }
+
+    painter.end();
+    waveformLabel->setPixmap(composite);
+    ADM_info("[Waveform] Composite pixmap set on label\n");
+}
+
 /**
     \fn UI_setSegments
     \brief SEt segments boundaries
@@ -3310,6 +3482,7 @@ void UI_setTotalTime(uint64_t curTime)
 void UI_setSegments(uint32_t numOfSegs, uint64_t * segPts)
 {
     slider->setSegments(numOfSegs, segPts);
+    updateWaveformDisplay();
 }
 /**
     \fn     UI_setMarkers(uint64_t Ptsa, uint32_t Ptsb )

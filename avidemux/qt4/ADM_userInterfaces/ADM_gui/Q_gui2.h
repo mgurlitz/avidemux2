@@ -243,6 +243,7 @@ private slots:
     void sliderReleased(void);
     void sliderPressed(void);
     void sliderWheel(int way);
+    void waveformClicked(int position, int totalWidth);
 
     void dragTimerTimeout(void);
     void busyTimerTimeout(void);
